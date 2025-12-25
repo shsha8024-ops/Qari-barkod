@@ -1,117 +1,90 @@
-
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Ghadeer Logistics Trans | قارئ رمز QR</title>
-  <link rel="icon" href="assets/icons/truck.png">
-  <script defer src="https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js"></script>
-  <style>
-    body{margin:0;font-family:system-ui,'Noto Sans Arabic';background:#0f172a;color:#f1f5f9;direction:rtl}
-    header{display:flex;align-items:center;justify-content:space-between;background:#1e293b;padding:10px 20px}
-    header img{height:48px;border-radius:6px}
-    h1{margin:0;font-size:18px}
-    main{padding:16px;max-width:1000px;margin:auto}
-    .video-box{position:relative;aspect-ratio:3/2;background:#000;border-radius:10px;overflow:hidden}
-    video{width:100%;height:100%;object-fit:cover}
-    .overlay{position:absolute;inset:0;border:2px dashed rgba(255,255,255,.3);border-radius:10px}
-    .controls{margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-    input,select,button{padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:#f1f5f9}
-    button{cursor:pointer}
-    button.primary{background:#38bdf8;border:0;color:#06202b;font-weight:bold}
-    iframe{width:100%;height:70vh;margin-top:16px;border-radius:10px;border:1px solid rgba(255,255,255,.1);background:#111}
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>⚡ مفكك PDF فوري</title>
+<style>
+  body {
+    background:#000;
+    color:#0ff;
+    font-family:'Tajawal',sans-serif;
+    text-align:center;
+    margin:0;
+    padding:40px;
+  }
+  textarea {
+    width:90%;
+    height:180px;
+    background:#111;
+    color:#0ff;
+    border:1px solid #0ff;
+    border-radius:8px;
+    padding:10px;
+    direction:ltr;
+  }
+  button {
+    margin:10px;
+    padding:10px 25px;
+    font-size:16px;
+    border:none;
+    border-radius:8px;
+    cursor:pointer;
+    color:#fff;
+    background:#06f;
+  }
+  #pdfViewer {
+    width:90%;
+    height:500px;
+    margin-top:20px;
+    display:none;
+    border-radius:10px;
+    border:none;
+  }
+</style>
 </head>
 <body>
-  <header>
-    <div style="display:flex;align-items:center;gap:10px;">
-      <img src="assets/icons/card.png" alt="Ghadeer Logo">
-      <h1>Ghadeer Logistics Trans – قارئ رمز QR</h1>
-    </div>
-    <div>
-      <select id="cameraSelect"></select>
-      <button id="startBtn" class="primary">تشغيل</button>
-      <button id="stopBtn">إيقاف</button>
-    </div>
-  </header>
+<h2>⚡ مفكك PDF الأسرع</h2>
+<textarea id="input" placeholder="ألصق الرد الكامل هنا (يحتوي على pdf_base64)"></textarea><br>
+<button id="decode">🔓 فك الترميز</button>
+<button id="openBtn" style="display:none;background:#0f0;">📂 فتح</button>
+<button id="downloadBtn" style="display:none;background:#08f;">💾 تحميل</button>
+<iframe id="pdfViewer"></iframe>
 
-  <main>
-    <div class="video-box">
-      <video id="preview" muted playsinline></video>
-      <div class="overlay"></div>
-    </div>
+<script>
+const input=document.getElementById("input");
+const decode=document.getElementById("decode");
+const pdfViewer=document.getElementById("pdfViewer");
+const openBtn=document.getElementById("openBtn");
+const downloadBtn=document.getElementById("downloadBtn");
+let pdfUrl=null,blob=null;
 
-    <div class="controls">
-      <input id="manual" placeholder="إدخال يدوي (≥ 12 رقم)">
-      <button id="readBtn" class="primary">عرض</button>
-    </div>
+function extractJSON(text){
+  const start=text.indexOf('{');
+  const end=text.lastIndexOf('}');
+  if(start===-1||end===-1)return null;
+  try{return JSON.parse(text.slice(start,end+1));}catch{return null;}
+}
 
-    <p id="status">الحالة: جاهز</p>
-    <iframe id="docFrame" title="document"></iframe>
-  </main>
+decode.onclick=()=>{
+  const raw=input.value.trim();
+  if(!raw)return alert("⚠️ أدخل النص أولاً");
+  const json=extractJSON(raw);
+  if(!json||!json.pdf_base64)return alert("❌ لم يتم العثور على pdf_base64");
+  try{
+    const base64=json.pdf_base64.replace(/[^A-Za-z0-9+/=]/g,"");
+    const bytes=Uint8Array.from(atob(base64),c=>c.charCodeAt(0));
+    blob=new Blob([bytes],{type:"application/pdf"});
+    pdfUrl=URL.createObjectURL(blob);
+    pdfViewer.src=pdfUrl;
+    pdfViewer.style.display="block";
+    openBtn.style.display="inline-block";
+    downloadBtn.style.display="inline-block";
+  }catch(e){alert("⚠️ خطأ في فك الترميز");}
+};
 
-  <script>
-    const codeReader = new ZXing.BrowserMultiFormatReader();
-    const videoEl = document.getElementById('preview');
-    const camSel  = document.getElementById('cameraSelect');
-    const startBtn= document.getElementById('startBtn');
-    const stopBtn = document.getElementById('stopBtn');
-    const status  = document.getElementById('status');
-    const manual  = document.getElementById('manual');
-    const readBtn = document.getElementById('readBtn');
-    const frameEl = document.getElementById('docFrame');
-
-    let running=false;
-
-    async function listCameras(){
-      const devices = await ZXing.BrowserMultiFormatReader.listVideoInputDevices();
-      camSel.innerHTML='';
-      devices.forEach((d,i)=>{
-        const o=document.createElement('option');
-        o.value=d.deviceId;
-        o.textContent=d.label||`كاميرا ${i+1}`;
-        camSel.appendChild(o);
-      });
-    }
-
-    async function start(){
-      if(running) return;
-      const devId=camSel.value;
-      status.textContent='تشغيل الكاميرا...';
-      try{
-        await codeReader.decodeFromVideoDevice(devId, videoEl, (result, err)=>{
-          if(result){
-            stop();
-            openDoc(result.getText());
-          }
-        });
-        running=true;
-        status.textContent='امسح الرمز داخل الإطار';
-      }catch(e){
-        status.textContent='تعذر الوصول للكاميرا';
-      }
-    }
-
-    function stop(){
-      if(!running)return;
-      codeReader.reset();
-      running=false;
-      status.textContent='تم الإيقاف';
-    }
-
-    function openDoc(code){
-      if(!code||code.length<12){alert('الرمز يجب ألا يقل عن 12 رقم');return;}
-      const url=`https://dm.ur.gov.iq/documents/${encodeURIComponent(code)}`;
-      frameEl.src=url;
-      status.textContent='عرض المستند: '+code;
-    }
-
-    startBtn.onclick=start;
-    stopBtn.onclick=stop;
-    readBtn.onclick=()=>openDoc(manual.value.trim());
-
-    (async()=>{await listCameras();})();
-  </script>
+openBtn.onclick=()=>{if(pdfUrl)window.open(pdfUrl,"_blank");};
+downloadBtn.onclick=()=>{if(blob){const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="decoded.pdf";a.click();}};
+</script>
 </body>
 </html>
